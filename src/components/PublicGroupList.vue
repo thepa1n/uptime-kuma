@@ -52,13 +52,13 @@
                             <div class="item" data-testid="monitor">
                                 <PublicGroupRow
                                     :element="monitor.element"
-                                    :show-drag-remove="editMode"
                                     :on-remove="() => removeMonitor(group.index, monitor.index)"
                                     :on-settings="() => $refs.monitorSettingDialog.show(group, monitor)"
                                     :show-tags="showTags"
                                     :show-certificate-expiry="showCertificateExpiry"
                                     :edit-mode="editMode"
                                     :heartbeat-key="$root.userHeartbeatBar"
+                                    :show-only-last-heartbeat="showOnlyLastHeartbeat"
                                     name-test-id="monitor-name"
                                 />
                             </div>
@@ -135,6 +135,16 @@ export default {
          */
         removeMonitor(groupIndex, index) {
             this.$root.publicGroupList[groupIndex].monitorList.splice(index, 1);
+        },
+
+        /**
+         * Update group properties
+         * @param {number} groupIndex Index of group to update
+         * @param {object} updates Object with properties to update
+         * @returns {void}
+         */
+        updateGroup(groupIndex, updates) {
+            Object.assign(this.$root.publicGroupList[groupIndex], updates);
         },
     }
 };

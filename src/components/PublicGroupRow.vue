@@ -2,12 +2,6 @@
     <div class="row">
         <div class="col-6 small-padding">
             <div class="info">
-                <font-awesome-icon v-if="showDragRemove" icon="arrows-alt-v" class="action drag me-3" />
-
-                <font-awesome-icon v-if="showDragRemove" icon="times" class="action remove me-3" @click.stop="onRemoveClick" />
-
-                <span v-if="displayIndicator" class="nested-indicator">{{ displayIndicator }}</span>
-
                 <font-awesome-icon
                     v-if="element.type === 'group' && element.childrenList && element.childrenList.length"
                     :icon="isExpanded ? 'chevron-down' : 'chevron-right'"
@@ -15,32 +9,76 @@
                     @click.stop="toggleGroupExpand"
                 />
 
-                <Uptime :monitor="element" type="24" :pill="true" />
+                <font-awesome-icon
+                    v-if="editMode && !isChild"
+                    icon="arrows-alt-v"
+                    class="action drag me-3"
+                />
 
-                <a v-if="showLink(element)" :href="element.url" class="item-name" target="_blank" rel="noopener noreferrer" :data-testid="nameTestId">
+                <font-awesome-icon
+                    v-if="editMode && !isChild"
+                    icon="times"
+                    class="action remove me-3"
+                    @click.stop="onRemoveClick"
+                />
+
+                <font-awesome-icon
+                    v-if="editMode && !isChild"
+                    icon="cog"
+                    class="action me-3 ms-0"
+                    :class="{ 'link-active': true, 'btn-link': true }"
+                    data-testid="monitor-settings"
+                    @click.stop="onSettingsClick"
+                />
+
+                <span v-if="displayIndicator" class="nested-indicator">{{ displayIndicator }}</span>
+
+                <Status
+                    v-if="showOnlyLastHeartbeat"
+                    :status="statusOfLastHeartbeat(element.id)"
+                />
+                <Uptime v-else :monitor="element" type="24" :pill="true" />
+                
+                <a
+                    v-if="showLink(element)"
+                    :href="element.url"
+                    class="item-name"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="monitor-name"
+                >
                     {{ element.name }}
                 </a>
 
-                <p v-else class="item-name" :data-testid="nameTestId"> {{ element.name }} </p>
-
-                <span title="Setting">
-                    <font-awesome-icon
-                        v-if="onSettings"
-                        :class="{'link-active': true, 'btn-link': true}"
-                        icon="cog" class="action me-3"
-                        @click.stop="onSettingsClick"
-                    />
-                </span>
+                <p v-else class="item-name" data-testid="monitor-name">
+                    {{ element.name }}
+                </p>
             </div>
             <div class="extra-info">
-                <div v-if="showCertificateExpiry && element.certExpiryDaysRemaining">
-                    <Tag :item="{name: $t('Cert Exp.'), value: formattedCertExpiryMessage(element), color: certExpiryColor(element)}" :size="'sm'" />
+                <div
+                    v-if="showCertificateExpiry && element.certExpiryDaysRemaining"
+                >
+                    <Tag
+                        :item="{
+                            name: $t('Cert Exp.'),
+                            value: formattedCertExpiryMessage(element),
+                            color: certExpiryColor(element),
+                        }"
+                        :size="'sm'"
+                    />
                 </div>
-                <div v-if="showTags && element.tags">
-                    <Tag v-for="tag in element.tags" :key="tag" :item="tag" :size="'sm'" />
+                <div v-if="showTags">
+                    <Tag
+                        v-for="tag in element.tags"
+                        :key="tag"
+                        :item="tag"
+                        :size="'sm'"
+                        data-testid="monitor-tag"
+                    />
                 </div>
             </div>
         </div>
+        
         <div :key="heartbeatKey" class="col-6">
             <HeartbeatBar size="mid" :monitor-id="element.id" />
         </div>
@@ -57,6 +95,7 @@
                     :heartbeat-key="$root.userHeartbeatBar"
                     name-test-id="nested-monitor-name"
                     :depth="depth + 1"
+                    :is-child="true"
                 />
             </div>
         </div>
@@ -65,8 +104,10 @@
 
 <script>
 import HeartbeatBar from "./HeartbeatBar.vue";
+import Status from "./Status.vue";
 import Uptime from "./Uptime.vue";
 import Tag from "./Tag.vue";
+
 
 export default {
     name: "PublicGroupRow",
@@ -74,30 +115,73 @@ export default {
         Uptime,
         HeartbeatBar,
         Tag,
+        Status,
     },
     props: {
-        element: { type: Object,
-            required: true },
-        showDragRemove: { type: Boolean,
-            default: false },
-        onRemove: { type: Function,
-            default: null },
-        onSettings: { type: Function,
-            default: null },
-        showTags: { type: Boolean,
-            default: false },
-        showCertificateExpiry: { type: Boolean,
-            default: false },
-        editMode: { type: Boolean,
-            default: false },
-        heartbeatKey: { type: [ String, Number ],
-            default: null },
-        indicator: { type: String,
-            default: "" },
-        depth: { type: Number,
-            default: 0 },
-        nameTestId: { type: String,
-            default: "monitor-name" },
+        /** Monitor or group element to display */
+        element: {
+            type: Object,
+            required: true
+        },
+
+        /** Callback for remove click */
+        onRemove: {
+            type: Function,
+            default: null,
+        },
+
+            /** Callback for settings click */
+        onSettings: {
+            type: Function,
+            default: null,
+        },
+
+        /** Is this a child monitor of monitor with group type? */
+        isChild: {
+            type: Boolean,
+            default: false,
+        },
+
+        /** Should tags be shown? */
+        showTags: {
+            type: Boolean,
+            default: false,
+        },
+
+        /** Should expiry be shown? */
+        showCertificateExpiry: {
+            type: Boolean,
+            default: false,
+        },
+
+        /** Are we in edit mode? */
+        editMode: {
+            type: Boolean,
+            required: true,
+        },
+
+        /** Key to force re-rendering of HeartbeatBar */
+        heartbeatKey: {
+            type: [ String, Number ],
+            default: null,
+        },
+
+        /** Indicator to show before the item name */
+        indicator: {
+            type: String,
+            default: "",
+        },
+
+        /** Depth of the nested item */
+        depth: {
+            type: Number,
+            default: 0,
+        },
+        
+        /** Should only the last heartbeat be shown? */
+        showOnlyLastHeartbeat: {
+            type: Boolean,
+        },
     },
     data() {
         return {
@@ -150,12 +234,22 @@ export default {
                 // ignore
             }
         },
+        /**
+         * Handle remove click
+         * @param {Event} e Click event
+         * @returns {void}
+         */
         onRemoveClick(e) {
             e.stopPropagation();
             if (this.onRemove) {
                 this.onRemove();
             }
         },
+        /**
+         * Handle settings click
+         * @param {Event} e Click event
+         * @returns {void}
+         */
         onSettingsClick(e) {
             e.stopPropagation();
             if (this.onSettings) {
@@ -210,6 +304,18 @@ export default {
 
             return "#DC2626";
         },
+
+        /**
+         * Returns the status of the last heartbeat
+         * @param {number} monitorId Id of the monitor to get status for
+         * @returns {number} Status of the last heartbeat
+         */
+        statusOfLastHeartbeat(monitorId) {
+            let heartbeats = this.$root.heartbeatList[monitorId] ?? [];
+            let lastHeartbeat = heartbeats[heartbeats.length - 1];
+            return lastHeartbeat?.status;
+        },
+
     }
 };
 </script>
