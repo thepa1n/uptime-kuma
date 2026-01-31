@@ -50,76 +50,17 @@
                     >
                         <template #item="monitor">
                             <div class="item" data-testid="monitor">
-                                <div class="row">
-                                    <div class="col-9 col-xl-6 small-padding">
-                                        <div class="info">
-                                            <font-awesome-icon
-                                                v-if="editMode"
-                                                icon="arrows-alt-v"
-                                                class="action drag me-3"
-                                            />
-                                            <font-awesome-icon
-                                                v-if="editMode"
-                                                icon="times"
-                                                class="action remove me-3"
-                                                @click="removeMonitor(group.index, monitor.index)"
-                                            />
-
-                                            <font-awesome-icon
-                                                v-if="editMode"
-                                                icon="cog"
-                                                class="action me-3 ms-0"
-                                                :class="{ 'link-active': true, 'btn-link': true }"
-                                                data-testid="monitor-settings"
-                                                @click="$refs.monitorSettingDialog.show(group, monitor)"
-                                            />
-                                            <Status
-                                                v-if="showOnlyLastHeartbeat"
-                                                :status="statusOfLastHeartbeat(monitor.element.id)"
-                                            />
-                                            <Uptime v-else :monitor="monitor.element" type="24" :pill="true" />
-                                            <a
-                                                v-if="showLink(monitor)"
-                                                :href="monitor.element.url"
-                                                class="item-name"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                data-testid="monitor-name"
-                                            >
-                                                {{ monitor.element.name }}
-                                            </a>
-                                            <p v-else class="item-name" data-testid="monitor-name">
-                                                {{ monitor.element.name }}
-                                            </p>
-                                        </div>
-                                        <div class="extra-info">
-                                            <div
-                                                v-if="showCertificateExpiry && monitor.element.certExpiryDaysRemaining"
-                                            >
-                                                <Tag
-                                                    :item="{
-                                                        name: $t('Cert Exp.'),
-                                                        value: formattedCertExpiryMessage(monitor),
-                                                        color: certExpiryColor(monitor),
-                                                    }"
-                                                    :size="'sm'"
-                                                />
-                                            </div>
-                                            <div v-if="showTags">
-                                                <Tag
-                                                    v-for="tag in monitor.element.tags"
-                                                    :key="tag"
-                                                    :item="tag"
-                                                    :size="'sm'"
-                                                    data-testid="monitor-tag"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div :key="$root.userHeartbeatBar" class="col-3 col-xl-6">
-                                        <HeartbeatBar size="mid" :monitor-id="monitor.element.id" />
-                                    </div>
-                                </div>
+                                <PublicGroupRow
+                                    :element="monitor.element"
+                                    :show-drag-remove="editMode"
+                                    :on-remove="() => removeMonitor(group.index, monitor.index)"
+                                    :on-settings="() => $refs.monitorSettingDialog.show(group, monitor)"
+                                    :show-tags="showTags"
+                                    :show-certificate-expiry="showCertificateExpiry"
+                                    :edit-mode="editMode"
+                                    :heartbeat-key="$root.userHeartbeatBar"
+                                    name-test-id="monitor-name"
+                                />
                             </div>
                         </template>
                     </Draggable>
@@ -133,20 +74,14 @@
 <script>
 import MonitorSettingDialog from "./MonitorSettingDialog.vue";
 import Draggable from "vuedraggable";
-import HeartbeatBar from "./HeartbeatBar.vue";
-import Uptime from "./Uptime.vue";
-import Tag from "./Tag.vue";
-import Status from "./Status.vue";
+import PublicGroupRow from "./PublicGroupRow.vue";
 import GroupSortDropdown from "./GroupSortDropdown.vue";
 
 export default {
     components: {
         MonitorSettingDialog,
         Draggable,
-        HeartbeatBar,
-        Uptime,
-        Tag,
-        Status,
+        PublicGroupRow,
         GroupSortDropdown,
     },
     props: {
@@ -201,93 +136,7 @@ export default {
         removeMonitor(groupIndex, index) {
             this.$root.publicGroupList[groupIndex].monitorList.splice(index, 1);
         },
-
-        /**
-         * Should a link to the monitor be shown?
-         * Attempts to guess if a link should be shown based upon if
-         * sendUrl is set and if the URL is default or not.
-         * @param {object} monitor Monitor to check
-         * @param {boolean} ignoreSendUrl Should the presence of the sendUrl
-         * property be ignored. This will only work in edit mode.
-         * @returns {boolean} Should the link be shown
-         */
-        showLink(monitor, ignoreSendUrl = false) {
-            // We must check if there are any elements in monitorList to
-            // prevent undefined errors if it hasn't been loaded yet
-            if (this.$parent.editMode && ignoreSendUrl && Object.keys(this.$root.monitorList).length) {
-                return (
-                    this.$root.monitorList[monitor.element.id].type === "http" ||
-                    this.$root.monitorList[monitor.element.id].type === "keyword" ||
-                    this.$root.monitorList[monitor.element.id].type === "json-query"
-                );
-            }
-            return monitor.element.sendUrl && monitor.element.url && monitor.element.url !== "https://";
-        },
-
-        /**
-         * Returns formatted certificate expiry or Bad cert message
-         * @param {object} monitor Monitor to show expiry for
-         * @returns {string} Certificate expiry message
-         */
-        formattedCertExpiryMessage(monitor) {
-            if (monitor?.element?.validCert && monitor?.element?.certExpiryDaysRemaining) {
-                return this.$t("days", monitor.element.certExpiryDaysRemaining);
-            } else if (monitor?.element?.validCert === false) {
-                return this.$t("noOrBadCertificate");
-            } else {
-                return this.$t("unknownDays");
-            }
-        },
-
-        /**
-         * Returns the status of the last heartbeat
-         * @param {number} monitorId Id of the monitor to get status for
-         * @returns {number} Status of the last heartbeat
-         */
-        statusOfLastHeartbeat(monitorId) {
-            let heartbeats = this.$root.heartbeatList[monitorId] ?? [];
-            let lastHeartbeat = heartbeats[heartbeats.length - 1];
-            return lastHeartbeat?.status;
-        },
-
-        /**
-         * Returns certificate expiry color based on days remaining
-         * @param {object} monitor Monitor to show expiry for
-         * @returns {string} Color for certificate expiry
-         */
-        certExpiryColor(monitor) {
-            if (monitor?.element?.validCert && monitor.element.certExpiryDaysRemaining > 7) {
-                return "#059669";
-            }
-            return "#DC2626";
-        },
-
-        /**
-         * Update group properties
-         * @param {number} groupIndex Index of group to update
-         * @param {object} updates Object with properties to update
-         * @returns {void}
-         */
-        updateGroup(groupIndex, updates) {
-            Object.assign(this.$root.publicGroupList[groupIndex], updates);
-        },
-
-        /**
-         * Get unique identifier for a group
-         * @param {object} group object
-         * @returns {string} group identifier
-         */
-        getGroupIdentifier(group) {
-            // Use the name directly if available
-            if (group.name) {
-                // Only remove spaces and use encodeURIComponent for URL safety
-                const cleanName = group.name.replace(/\s+/g, "");
-                return cleanName;
-            }
-            // Fallback to ID or index
-            return group.id ? `group${group.id}` : `group${this.$root.publicGroupList.indexOf(group)}`;
-        },
-    },
+    }
 };
 </script>
 
