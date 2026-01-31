@@ -314,13 +314,6 @@ export default {
     min-height: 46px;
 }
 
-.item-name {
-    padding-left: 5px;
-    padding-right: 5px;
-    margin: 0;
-    display: inline-block;
-}
-
 .btn-link {
     color: #bbbbbb;
     margin-left: 5px;
